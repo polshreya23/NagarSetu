@@ -43,11 +43,14 @@ export const PriorityOverrideModal: React.FC<PriorityOverrideModalProps> = ({
     try {
       const res = await fetch(`/api/complaints/${complaint.id}/priority`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': 'user-admin-1',
+        },
         body: JSON.stringify({
           priorityLevel: level,
           priorityScore: score,
-          adminName,
+          adminName: 'Shreya Pol',
           reason,
         }),
       });

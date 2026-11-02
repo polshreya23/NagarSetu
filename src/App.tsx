@@ -9,9 +9,23 @@ import { AnalyticsPage } from './pages/AnalyticsPage.tsx';
 import { ReportComplaintModal } from './components/ReportComplaintModal.tsx';
 import { ComplaintDetailsModal } from './components/ComplaintDetailsModal.tsx';
 import { PriorityOverrideModal } from './components/PriorityOverrideModal.tsx';
+import { AuthScreen } from './components/AuthScreen.tsx';
+import { AdminProfileModal } from './components/AdminProfileModal.tsx';
+import { auth, signOut, onAuthStateChanged } from './firebase.ts';
+import { Building2 } from 'lucide-react';
 
-// Pre-configured simulated users for seamless demo switching
+// Pre-configured simulated users with Shreya Pol as primary Super Administrator
 const DEMO_USERS: User[] = [
+  {
+    id: 'user-admin-1',
+    name: 'Shreya Pol',
+    email: 'shreya.1251070104@vit.edu',
+    role: 'admin',
+    titleRole: 'Super Administrator',
+    phone: '+91 98220 11223',
+    ward: 'PMC Central Command',
+    createdAt: new Date().toISOString(),
+  },
   {
     id: 'user-citizen-1',
     name: 'Aarav Sharma',
@@ -30,27 +44,20 @@ const DEMO_USERS: User[] = [
     ward: 'Kothrud',
     createdAt: new Date().toISOString(),
   },
-  {
-    id: 'user-admin-1',
-    name: 'Shri. Rajesh Deshmukh',
-    email: 'admin@pune-civic.gov.in',
-    role: 'admin',
-    phone: '+91 98220 11223',
-    ward: 'PMC Central Command',
-    createdAt: new Date().toISOString(),
-  },
 ];
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>('landing');
-  const [currentUser, setCurrentUser] = useState<User>(DEMO_USERS[0]);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isCheckingSession, setIsCheckingSession] = useState<boolean>(true);
   const [complaints, setComplaints] = useState<Complaint[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loadingComplaints, setLoadingComplaints] = useState<boolean>(true);
 
   // Modals
   const [reportModalOpen, setReportModalOpen] = useState<boolean>(false);
   const [selectedComplaint, setSelectedComplaint] = useState<Complaint | null>(null);
   const [overrideModalComplaint, setOverrideModalComplaint] = useState<Complaint | null>(null);
+  const [adminProfileOpen, setAdminProfileOpen] = useState<boolean>(false);
 
   // Notification Toast
   const [notification, setNotification] = useState<string | null>(null);
@@ -70,17 +77,119 @@ export default function App() {
     } catch (err) {
       console.error('Failed fetching complaints:', err);
     } finally {
-      setLoading(false);
+      setLoadingComplaints(false);
     }
   };
 
+  // Check login session on application load
   useEffect(() => {
     fetchComplaints();
+
+    // 1. Check local session storage
+    const savedUserStr = localStorage.getItem('nagarsetu_user');
+    if (savedUserStr) {
+      try {
+        const parsed = JSON.parse(savedUserStr);
+        if (parsed && parsed.email) {
+          fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: parsed.email }),
+          })
+            .then((res) => res.json())
+            .then((data) => {
+              if (data.user) {
+                setCurrentUser(data.user);
+                setActiveTab(data.user.role === 'admin' ? 'admin' : 'citizen');
+              } else {
+                setCurrentUser(parsed);
+              }
+            })
+            .catch(() => setCurrentUser(parsed))
+            .finally(() => setIsCheckingSession(false));
+          return;
+        }
+      } catch (e) {
+        console.warn('Failed parsing cached session', e);
+      }
+    }
+
+    // 2. Check Firebase session
+    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+      if (fbUser && fbUser.email) {
+        try {
+          const res = await fetch('/api/auth/google', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: fbUser.email,
+              name: fbUser.displayName || fbUser.email.split('@')[0],
+              photoUrl: fbUser.photoURL || undefined,
+              uid: fbUser.uid,
+            }),
+          });
+          const data = await res.json();
+          if (data.user) {
+            setCurrentUser(data.user);
+            localStorage.setItem('nagarsetu_user', JSON.stringify(data.user));
+            setActiveTab(data.user.role === 'admin' ? 'admin' : 'citizen');
+          }
+        } catch (err) {
+          console.error('Error syncing auth session', err);
+        }
+      }
+      setIsCheckingSession(false);
+    });
+
+    return () => unsubscribe();
   }, []);
 
-  const handleSelectUser = (user: User) => {
+  // Handle successful login
+  const handleLoginSuccess = (user: User) => {
     setCurrentUser(user);
-    showNotification(`Switched profile to: ${user.name} (${user.role.toUpperCase()})`);
+    localStorage.setItem('nagarsetu_user', JSON.stringify(user));
+    // Redirect based on authenticated role
+    if (user.role === 'admin') {
+      setActiveTab('admin');
+      showNotification(`Welcome, ${user.name} (Super Administrator)`);
+    } else {
+      setActiveTab('citizen');
+      showNotification(`Welcome, ${user.name} (Citizen)`);
+    }
+  };
+
+  // Demo user login shortcut
+  const handleDemoLogin = async (email: string) => {
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (data.user) {
+        handleLoginSuccess(data.user);
+      }
+    } catch (err) {
+      console.error('Demo login error:', err);
+    }
+  };
+
+  // Logout handler
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+    } catch (e) {
+      // Ignore
+    }
+    localStorage.removeItem('nagarsetu_user');
+    setCurrentUser(null);
+    setAdminProfileOpen(false);
+    showNotification('Signed out of NagarSetu.');
+  };
+
+  const handleSelectUser = (user: User) => {
+    handleLoginSuccess(user);
   };
 
   const handleComplaintSubmitted = (newComplaint: Complaint) => {
@@ -105,21 +214,31 @@ export default function App() {
   };
 
   const handleQuickStatusChange = async (complaintId: string, newStatus: ComplaintStatus) => {
+    if (!currentUser) return;
+
     try {
       const res = await fetch(`/api/complaints/${complaintId}/status`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': currentUser.id,
+        },
         body: JSON.stringify({
           status: newStatus,
           updatedBy: {
+            userId: currentUser.id,
             name: currentUser.name,
             role: 'Admin',
           },
-          remarks: `Quick status updated to ${newStatus}`,
+          remarks: `Status updated to ${newStatus} by ${currentUser.name}`,
         }),
       });
 
       const data = await res.json();
+      if (!res.ok) {
+        showNotification(data.error || 'Permission denied: Admin privileges required.');
+        return;
+      }
       if (data.complaint) {
         handleComplaintUpdated(data.complaint);
       }
@@ -138,6 +257,35 @@ export default function App() {
     }
   };
 
+  // 1. Loading screen while checking authentication session
+  if (isCheckingSession) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-white font-['Plus_Jakarta_Sans'] p-4">
+        <div className="text-center space-y-4">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-700 flex items-center justify-center mx-auto shadow-xl shadow-blue-500/25 border border-blue-400/40">
+            <Building2 className="w-8 h-8 text-white" />
+          </div>
+          <div className="w-7 h-7 border-3 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" />
+          <div>
+            <h3 className="font-bold text-base">NagarSetu</h3>
+            <p className="text-xs text-slate-400">Verifying civic authentication session...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. First-Open Authentication Screen (if not logged in)
+  if (!currentUser) {
+    return (
+      <AuthScreen
+        onLoginSuccess={handleLoginSuccess}
+        onDemoLogin={handleDemoLogin}
+      />
+    );
+  }
+
+  // 3. Authenticated NagarSetu Application
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-['Plus_Jakarta_Sans']">
       {/* Navbar */}
@@ -149,6 +297,8 @@ export default function App() {
         setActiveTab={setActiveTab}
         onOpenReportModal={() => setReportModalOpen(true)}
         onResetDemoData={handleResetDemoData}
+        onLogout={handleLogout}
+        onOpenProfileModal={() => setAdminProfileOpen(true)}
       />
 
       {/* Toast Notification */}
@@ -161,12 +311,12 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1">
-        {loading ? (
+        {loadingComplaints ? (
           <div className="flex items-center justify-center min-h-[60vh]">
             <div className="text-center space-y-2">
               <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto" />
               <p className="text-xs text-slate-500 font-semibold">
-                Initializing NagarSetu Civic Engine...
+                Loading NagarSetu Civic Engine Data...
               </p>
             </div>
           </div>
@@ -197,7 +347,7 @@ export default function App() {
                 onSelectComplaint={(c) => setSelectedComplaint(c)}
                 onOverridePriority={(c) => setOverrideModalComplaint(c)}
                 onQuickStatusChange={handleQuickStatusChange}
-                onSwitchToAdmin={() => handleSelectUser(DEMO_USERS[2])}
+                onSwitchToAdmin={() => handleDemoLogin('shreya.1251070104@vit.edu')}
               />
             )}
 
@@ -223,7 +373,7 @@ export default function App() {
           </div>
 
           <div className="text-[11px] text-slate-500 text-center md:text-right">
-            Demonstration civic intelligence prototype for Pune urban area.
+            Super Administrator: <strong className="text-slate-300">Shreya Pol</strong> • Pune Municipal Corporation
             <br />
             Powered by Google Gemini 3.8 Flash Multimodal Vision • OpenStreetMap
           </div>
@@ -259,6 +409,16 @@ export default function App() {
           onClose={() => setOverrideModalComplaint(null)}
           adminName={currentUser.name}
           onOverrideSaved={handleComplaintUpdated}
+        />
+      )}
+
+      {/* Admin Profile Modal */}
+      {adminProfileOpen && (
+        <AdminProfileModal
+          user={currentUser}
+          isOpen={adminProfileOpen}
+          onClose={() => setAdminProfileOpen(false)}
+          onLogout={handleLogout}
         />
       )}
     </div>

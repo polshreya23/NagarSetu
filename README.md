@@ -10,10 +10,20 @@ AI-powered smart civic issue reporting and municipal management platform for Ind
 **NagarSetu** bridges citizens and urban civic administrations (Pune Municipal Corporation) using multimodal AI and spatial analytics.
 
 ### Key Capabilities
+- **First-Open Authentication Portal:**
+  - Modern welcome portal presenting Google OAuth, Mobile OTP verification, and Email/Password authentication.
+  - Role-based automatic redirection: Administrators are routed to the Municipal Command Center; citizens to the Citizen Grievance Portal.
+  - Persistent login sessions with secure sign-out.
+
+- **Administrator Identity & Role-Based Security:**
+  - **Super Administrator:** `Shreya Pol` (`shreya.1251070104@vit.edu` / `admin@pune-civic.gov.in`)
+  - Strict server-side access control: only authorized administrators can modify complaint status, deploy field teams, or override priority scores.
+  - All public sign-ups (via Google, Phone, or Email) are strictly provisioned as `CITIZEN` accounts. No user can self-escalate privileges.
+
 - **Citizen Portal:**
-  - Fast photo upload with instant on-site damage assessment.
+  - Rapid grievance registration with device camera/photo upload.
   - Interactive Pune GIS map picker (FC Road, Kothrud, Viman Nagar, Hadapsar, Baner, Hinjawadi, Camp) and GPS auto-detection.
-  - Pre-submission duplicate detection within 100 meters and 7 days. Citizens can co-report/endorse existing issues rather than flooding municipal systems with redundant tickets.
+  - Pre-submission duplicate detection within 100 metres and 7 days. Citizens can co-report/endorse existing issues rather than flooding municipal systems with redundant tickets.
   - End-to-end grievance status tracking with transparent audit trails.
 
 - **AI Engine (Gemini 3.8 Flash):**
@@ -43,6 +53,7 @@ AI-powered smart civic issue reporting and municipal management platform for Ind
 ## 🛠️ Technology Stack
 - **Frontend:** React 19, TypeScript, Tailwind CSS, Lucide Icons
 - **Backend:** Node.js, Express
+- **Authentication:** Firebase Authentication (Google OAuth, Phone Auth, Email/Password)
 - **AI Integration:** `@google/genai` TypeScript SDK (Server-Side using `gemini-3.8-flash`)
 - **Maps:** Leaflet & OpenStreetMap
 - **Analytics:** Recharts
@@ -50,9 +61,21 @@ AI-powered smart civic issue reporting and municipal management platform for Ind
 
 ---
 
-## ⚙️ Environment Variables
+## ⚙️ Environment Variables & Configuration
 
-Configure these variables in your `.env` file:
+The application uses Firebase client configuration stored in `firebase-applet-config.json` (auto-provisioned):
+
+```json
+{
+  "projectId": "gen-lang-client-0862992569",
+  "appId": "1:317915926342:web:a0b8b818e8f2351aef9f47",
+  "apiKey": "AIzaSyDH...",
+  "authDomain": "gen-lang-client-0862992569.firebaseapp.com",
+  "firestoreDatabaseId": "ai-studio-nagarsetu-68cd0c64-e4a0-4f05-944f-7a77921b6bd1"
+}
+```
+
+Configure these in your `.env` file:
 
 ```env
 # Google Gemini API Key for server-side image analysis
@@ -65,7 +88,9 @@ PORT=3000
 APP_URL="http://localhost:3000"
 ```
 
-> **Note on Security:** `GEMINI_API_KEY` is exclusively consumed on the Node.js server (`server/ai.ts`) and is never leaked to the browser bundle.
+> **Firebase Console Step for Production Phone Auth:**
+> 1. In your Firebase Console under **Authentication > Sign-in method**, ensure **Google** and **Phone** providers are enabled.
+> 2. For testing, add any test phone numbers under **Phone numbers for testing** in Firebase Console.
 
 ---
 
@@ -94,15 +119,17 @@ APP_URL="http://localhost:3000"
 
 ---
 
-## 🧪 Demo Credentials & Baseline Data
+## 🧪 Demo Credentials & Baseline Profiles
 
-The platform comes pre-seeded with realistic Pune demo complaints (labeled as **DEMO DATA**):
+You can log in using any of the following accounts from the welcome screen:
 
+- **Super Administrator:** `shreya.1251070104@vit.edu` or `admin@pune-civic.gov.in`
+  - Name: **Shreya Pol**
+  - Role: **Super Administrator**
+  - Access: Full municipal operations dashboard, status closures, and priority overrides.
 - **Citizen 1:** `aarav.sharma@example.com` (Shivajinagar)
 - **Citizen 2:** `priya.patil@example.com` (Kothrud)
-- **Authority (Admin):** `admin@pune-civic.gov.in` (PMC Central Command)
-
-You can switch between these profiles at any time via the top-right profile switcher in the navigation bar.
+- **New Citizen Sign-Up:** Sign in via Google, Mobile Phone OTP (+91), or new citizen email registration.
 
 ---
 

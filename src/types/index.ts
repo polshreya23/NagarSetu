@@ -91,6 +91,8 @@ export interface User {
   role: 'citizen' | 'admin';
   phone?: string;
   ward?: string;
+  photoUrl?: string;
+  titleRole?: string;
   createdAt: string;
 }
 

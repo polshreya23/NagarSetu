@@ -97,9 +97,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </p>
         <button
           onClick={onSwitchToAdmin}
-          className="bg-purple-700 hover:bg-purple-800 text-white px-6 py-2.5 rounded-xl font-bold text-sm shadow transition"
+          className="bg-purple-700 hover:bg-purple-800 text-white px-6 py-2.5 rounded-xl font-bold text-sm shadow transition cursor-pointer"
         >
-          Switch to Authority Profile (Shri. Rajesh Deshmukh - PMC Admin)
+          Switch to Authority Profile (Shreya Pol - Super Administrator)
         </button>
       </div>
     );
@@ -117,21 +117,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </h1>
           </div>
           <p className="text-xs sm:text-sm text-slate-400 mt-1">
-            Officer on Duty: <span className="text-slate-200 font-semibold">{currentUser.name}</span> • Central Grid Dispatch & Algorithmic Priority Queue
+            Super Administrator on Duty: <span className="text-purple-300 font-bold">Shreya Pol</span> (Super Administrator) • Central Grid Dispatch & Algorithmic Priority Queue
           </p>
         </div>
 
-        {critical > 0 && (
-          <div className="bg-red-500/20 border border-red-500/40 rounded-xl px-4 py-2 flex items-center gap-2.5 text-red-300">
-            <Flame className="w-5 h-5 text-red-400 animate-pulse" />
-            <div>
-              <div className="text-xs font-bold uppercase tracking-wider">Critical SLA Alert</div>
-              <div className="text-[11px] text-red-200">
-                {critical} critical unresolved grievance(s) requiring immediate intervention.
+        <div className="flex items-center gap-3">
+          <div className="bg-purple-900/60 border border-purple-500/50 rounded-xl px-3.5 py-2 text-right hidden sm:block">
+            <div className="text-xs font-bold text-purple-200">Shreya Pol</div>
+            <div className="text-[10px] text-purple-300 font-mono">Super Administrator</div>
+          </div>
+
+          {critical > 0 && (
+            <div className="bg-red-500/20 border border-red-500/40 rounded-xl px-4 py-2 flex items-center gap-2.5 text-red-300">
+              <Flame className="w-5 h-5 text-red-400 animate-pulse" />
+              <div>
+                <div className="text-xs font-bold uppercase tracking-wider">Critical SLA Alert</div>
+                <div className="text-[11px] text-red-200">
+                  {critical} critical unresolved grievance(s).
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* KPI Cards */}

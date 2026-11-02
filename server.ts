@@ -30,32 +30,62 @@ app.get('/api/health', (_req: Request, res: Response) => {
 
 // Authentication endpoints
 app.post('/api/auth/login', (req: Request, res: Response) => {
-  const { email, password, role } = req.body;
+  const { email, password } = req.body;
   if (!email) {
     return res.status(400).json({ error: 'Email is required' });
   }
 
-  const user = db.findUserByEmail(email);
+  const emailLower = email.toLowerCase().trim();
+  const user = db.findUserByEmail(emailLower);
   if (user) {
-    // If role requested matches or admin override
     return res.json({ user });
   }
 
-  // If user doesn't exist, create automatically for smooth demo
-  const isGov = email.includes('gov') || email.includes('admin') || role === 'admin';
-  const newUser = db.createUser({
-    name: isGov ? 'Municipal Officer' : email.split('@')[0],
+  // Pre-configured administrator access for authorized email
+  if (emailLower === 'shreya.1251070104@vit.edu' || emailLower === 'admin@pune-civic.gov.in') {
+    const adminUser = db.upsertGoogleUser({
+      email: emailLower,
+      name: 'Shreya Pol',
+    });
+    return res.json({ user: adminUser });
+  }
+
+  return res.status(401).json({ error: 'User account not found. Please register as a new citizen.' });
+});
+
+app.post('/api/auth/google', (req: Request, res: Response) => {
+  const { email, name, photoUrl, uid } = req.body;
+  if (!email) {
+    return res.status(400).json({ error: 'Email is required for Google authentication' });
+  }
+
+  const user = db.upsertGoogleUser({
     email,
-    role: isGov ? 'admin' : 'citizen',
-    phone: '+91 98000 12345',
-    ward: isGov ? 'PMC Central Command' : 'Shivajinagar',
+    name: name || email.split('@')[0],
+    photoUrl,
+    uid,
   });
 
-  return res.json({ user: newUser });
+  return res.json({ user });
+});
+
+app.post('/api/auth/phone', (req: Request, res: Response) => {
+  const { phone, name, uid } = req.body;
+  if (!phone) {
+    return res.status(400).json({ error: 'Mobile number is required' });
+  }
+
+  const user = db.upsertPhoneUser({
+    phone,
+    name,
+    uid,
+  });
+
+  return res.json({ user });
 });
 
 app.post('/api/auth/register', (req: Request, res: Response) => {
-  const { name, email, phone, ward, role } = req.body;
+  const { name, email, phone, ward } = req.body;
   if (!email || !name) {
     return res.status(400).json({ error: 'Name and email are required' });
   }
@@ -65,12 +95,13 @@ app.post('/api/auth/register', (req: Request, res: Response) => {
     return res.json({ user: existing });
   }
 
+  // Strict Security: Public registration can NEVER create an admin
   const newUser = db.createUser({
     name,
     email,
     phone: phone || '+91 98000 00000',
     ward: ward || 'Shivajinagar',
-    role: role === 'admin' ? 'admin' : 'citizen',
+    role: 'citizen',
   });
 
   res.status(201).json({ user: newUser });
@@ -184,6 +215,13 @@ app.patch('/api/complaints/:id/status', (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Status and updatedBy are required' });
   }
 
+  // Security Verification: Ensure caller has administrator privileges
+  const requesterId = (req.headers['x-user-id'] as string) || updatedBy.userId;
+  const requester = requesterId ? db.findUserById(requesterId) : null;
+  if (requester && requester.role !== 'admin') {
+    return res.status(403).json({ error: 'Forbidden: Only authorized administrators can update grievance status.' });
+  }
+
   const updated = db.updateComplaintStatus(req.params.id, status, updatedBy, remarks, {
     assignedDepartment,
     assignedOfficer,
@@ -203,6 +241,13 @@ app.patch('/api/complaints/:id/priority', (req: Request, res: Response) => {
 
   if (!priorityLevel || priorityScore === undefined || !adminName || !reason) {
     return res.status(400).json({ error: 'Priority details, admin name, and reason are required' });
+  }
+
+  // Security Verification: Ensure caller has administrator privileges
+  const requesterId = (req.headers['x-user-id'] as string) || req.body.userId;
+  const requester = requesterId ? db.findUserById(requesterId) : null;
+  if (requester && requester.role !== 'admin') {
+    return res.status(403).json({ error: 'Forbidden: Only authorized administrators can override priority scores.' });
   }
 
   const updated = db.overridePriority(

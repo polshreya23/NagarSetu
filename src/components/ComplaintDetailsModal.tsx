@@ -59,10 +59,14 @@ export const ComplaintDetailsModal: React.FC<ComplaintDetailsModalProps> = ({
     try {
       const res = await fetch(`/api/complaints/${complaint.id}/status`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': currentUser.id,
+        },
         body: JSON.stringify({
           status: selectedNewStatus,
           updatedBy: {
+            userId: currentUser.id,
             name: currentUser.name,
             role: 'Admin',
           },

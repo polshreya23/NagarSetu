@@ -17,9 +17,10 @@ interface DatabaseSchema {
 const INITIAL_USERS: User[] = [
   {
     id: 'user-admin-1',
-    name: 'Shri. Rajesh Deshmukh',
-    email: 'admin@pune-civic.gov.in',
+    name: 'Shreya Pol',
+    email: 'shreya.1251070104@vit.edu',
     role: 'admin',
+    titleRole: 'Super Administrator',
     phone: '+91 98220 11223',
     ward: 'PMC Central Command',
     createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
@@ -107,7 +108,7 @@ const INITIAL_COMPLAINTS: Complaint[] = [
         id: 'hist-3',
         timestamp: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
         status: 'In Progress',
-        updatedBy: 'Shri. Rajesh Deshmukh',
+        updatedBy: 'Shreya Pol',
         role: 'Admin',
         remarks: 'Cold-mix asphalt patch team dispatched for evening night-shift repair.',
       },
@@ -271,7 +272,7 @@ const INITIAL_COMPLAINTS: Complaint[] = [
         id: 'hist-drain-2',
         timestamp: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
         status: 'In Progress',
-        updatedBy: 'Shri. Rajesh Deshmukh',
+        updatedBy: 'Shreya Pol',
         role: 'Admin',
         remarks: 'Suction jetting machine team assigned.',
       },
@@ -334,7 +335,7 @@ const INITIAL_COMPLAINTS: Complaint[] = [
         id: 'hist-light-2',
         timestamp: new Date(Date.now() - 40 * 60 * 60 * 1000).toISOString(),
         status: 'In Progress',
-        updatedBy: 'Shri. Rajesh Deshmukh',
+        updatedBy: 'Shreya Pol',
         role: 'Admin',
         remarks: 'Maintenance van scheduled for evening inspection.',
       },
@@ -423,6 +424,40 @@ class DatabaseManager {
         const fileContent = fs.readFileSync(DB_FILE, 'utf-8');
         const parsed = JSON.parse(fileContent);
         if (parsed && Array.isArray(parsed.complaints) && Array.isArray(parsed.users)) {
+          // Ensure primary admin is updated to Shreya Pol (Super Administrator)
+          const adminIdx = parsed.users.findIndex(
+            (u: User) =>
+              u.id === 'user-admin-1' ||
+              u.email === 'admin@pune-civic.gov.in' ||
+              u.email === 'shreya.1251070104@vit.edu' ||
+              u.name === 'Shri. Rajesh Deshmukh'
+          );
+          if (adminIdx >= 0) {
+            parsed.users[adminIdx] = {
+              ...parsed.users[adminIdx],
+              id: 'user-admin-1',
+              name: 'Shreya Pol',
+              email: 'shreya.1251070104@vit.edu',
+              role: 'admin',
+              titleRole: 'Super Administrator',
+              ward: 'PMC Central Command',
+            };
+          } else {
+            parsed.users.unshift(INITIAL_USERS[0]);
+          }
+
+          // Migrate any history notes referencing old admin name
+          parsed.complaints.forEach((c: Complaint) => {
+            if (Array.isArray(c.history)) {
+              c.history.forEach((h: StatusHistoryEntry) => {
+                if (h.updatedBy === 'Shri. Rajesh Deshmukh') {
+                  h.updatedBy = 'Shreya Pol';
+                }
+              });
+            }
+          });
+
+          this.saveDatabase(parsed);
           return parsed;
         }
       } catch (err) {
@@ -662,12 +697,96 @@ class DatabaseManager {
     return this.data.users.find((u) => u.id === id);
   }
 
+  public findUserByPhone(phone: string): User | undefined {
+    if (!phone) return undefined;
+    const clean = phone.replace(/[^0-9]/g, '');
+    return this.data.users.find((u) => {
+      if (!u.phone) return false;
+      const uClean = u.phone.replace(/[^0-9]/g, '');
+      return uClean.endsWith(clean) || clean.endsWith(uClean);
+    });
+  }
+
   public createUser(userData: Omit<User, 'id' | 'createdAt'>): User {
+    const emailLower = (userData.email || '').toLowerCase().trim();
+    const isAdminEmail = emailLower === 'shreya.1251070104@vit.edu' || emailLower === 'admin@pune-civic.gov.in';
+
     const newUser: User = {
       ...userData,
       id: `user-${Date.now()}`,
+      // Enforce strict security: only whitelisted email can be admin
+      role: isAdminEmail ? 'admin' : 'citizen',
+      titleRole: isAdminEmail ? 'Super Administrator' : undefined,
+      name: isAdminEmail ? 'Shreya Pol' : userData.name,
       createdAt: new Date().toISOString(),
     };
+    this.data.users.push(newUser);
+    this.saveDatabase();
+    return newUser;
+  }
+
+  public upsertGoogleUser(googleData: {
+    uid?: string;
+    email: string;
+    name: string;
+    photoUrl?: string;
+  }): User {
+    const emailLower = (googleData.email || '').toLowerCase().trim();
+    const isAdminEmail = emailLower === 'shreya.1251070104@vit.edu' || emailLower === 'admin@pune-civic.gov.in';
+
+    let user = this.findUserByEmail(emailLower);
+    if (user) {
+      user.name = isAdminEmail ? 'Shreya Pol' : (googleData.name || user.name);
+      if (googleData.photoUrl) user.photoUrl = googleData.photoUrl;
+      if (isAdminEmail) {
+        user.role = 'admin';
+        user.titleRole = 'Super Administrator';
+      }
+      this.saveDatabase();
+      return user;
+    }
+
+    const newUser: User = {
+      id: googleData.uid || `user-google-${Date.now()}`,
+      name: isAdminEmail ? 'Shreya Pol' : (googleData.name || emailLower.split('@')[0]),
+      email: emailLower,
+      role: isAdminEmail ? 'admin' : 'citizen',
+      titleRole: isAdminEmail ? 'Super Administrator' : undefined,
+      photoUrl: googleData.photoUrl,
+      ward: isAdminEmail ? 'PMC Central Command' : 'Shivajinagar',
+      createdAt: new Date().toISOString(),
+    };
+
+    this.data.users.push(newUser);
+    this.saveDatabase();
+    return newUser;
+  }
+
+  public upsertPhoneUser(phoneData: {
+    phone: string;
+    name?: string;
+    uid?: string;
+  }): User {
+    let user = this.findUserByPhone(phoneData.phone);
+    if (user) {
+      if (phoneData.name && user.name.startsWith('Citizen')) {
+        user.name = phoneData.name;
+        this.saveDatabase();
+      }
+      return user;
+    }
+
+    // Phone users are always citizens
+    const newUser: User = {
+      id: phoneData.uid || `user-phone-${Date.now()}`,
+      name: phoneData.name || `Citizen (${phoneData.phone.slice(-4)})`,
+      email: `${phoneData.phone.replace(/[^0-9]/g, '')}@nagarsetu.citizen`,
+      phone: phoneData.phone,
+      role: 'citizen',
+      ward: 'Pune Central',
+      createdAt: new Date().toISOString(),
+    };
+
     this.data.users.push(newUser);
     this.saveDatabase();
     return newUser;

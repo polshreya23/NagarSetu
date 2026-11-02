@@ -1,0 +1,46 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        request.auth.token.email == 'shreya.1251070104@vit.edu' ||
+        request.auth.token.email == 'admin@pune-civic.gov.in'
+      );
+    }
+
+    // Default deny all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // User profiles
+    match /users/{userId} {
+      allow read: if isSignedIn() && (isOwner(userId) || isAdmin());
+      // Prevent self-assigned admin role
+      allow create: if isSignedIn() && isOwner(userId) &&
+        (!('role' in request.resource.data) || request.resource.data.role == 'citizen');
+      // Prevent user from elevating their own role
+      allow update: if isSignedIn() && (
+        (isOwner(userId) && !('role' in request.resource.data.diff(resource.data).affectedKeys())) ||
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Admins registry
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+  }
+}
