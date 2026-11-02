@@ -1,0 +1,6 @@
+{
+  "name": "NagarSetu",
+  "description": "AI-powered smart civic issue reporting and management platform for Indian cities.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
